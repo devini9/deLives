@@ -115,7 +115,7 @@
                 "-DENABLE_LIBFDK=ON",
                 "-DENABLE_QSV11=ON",
                 "-DENABLE_DECKLINK=OFF",
-                "-DOBS_VERSION_OVERRIDE=0.1.0"
+                "-DOBS_VERSION_OVERRIDE=0.1.1"
             ],
             "post-install": [
                 "install -d /app/plugins",

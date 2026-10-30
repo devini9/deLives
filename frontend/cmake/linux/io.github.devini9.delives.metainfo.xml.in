@@ -29,7 +29,7 @@
   </recommends>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.1.0" date="2026-10-30">
+    <release version="0.1.1" date="2026-10-31">
       <url type="details">https://github.com/devini9/deLives</url>
     </release>
   </releases>

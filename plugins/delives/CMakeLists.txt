@@ -30,4 +30,4 @@ target_link_libraries(
 target_link_directories(delives PRIVATE ${LIBSECRET_LIBRARY_DIRS})
 target_compile_options(delives PRIVATE ${LIBSECRET_CFLAGS_OTHER})
 
-set_target_properties_obs(delives PROPERTIES FOLDER plugins/delives)
+set_target_properties_obs(delives PROPERTIES FOLDER plugins/delives PREFIX "")
