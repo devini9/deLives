@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+  <id>io.github.devini9.delives</id>
+  <launchable type="desktop-id">io.github.devini9.delives.desktop</launchable>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0-or-later</project_license>
+  <name>deLives</name>
+  <developer id="io.github.devini9">
+    <name>devini9</name>
+  </developer>
+  <summary>Live streaming app for YouTube based on OBS Studio</summary>
+  <description>
+    <p>deLives is a live streaming app for YouTube based on OBS Studio, with a focus on a simplified streaming workflow.</p>
+    <p>Features:</p>
+    <ul>
+      <li>High performance real time video/audio capturing and mixing.</li>
+      <li>Secure YouTube stream key storage (system keyring).</li>
+      <li>Easy presets for high resolution streaming (1080p60, 1440p60, 4K60).</li>
+      <li>Built-in 60 seconds live test with connection report.</li>
+    </ul>
+  </description>
+  <url type="homepage">https://github.com/devini9/deLives</url>
+  <url type="bugtracker">https://github.com/devini9/deLives/issues</url>
+  <url type="vcs-browser">https://github.com/devini9/deLives</url>
+  <recommends>
+    <internet>always</internet>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </recommends>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-10-30">
+      <url type="details">https://github.com/devini9/deLives</url>
+    </release>
+  </releases>
+</component>
