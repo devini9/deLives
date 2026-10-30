@@ -98,6 +98,30 @@
             ]
         },
         {
+            "name": "cef",
+            "build-options": {
+                "no-debuginfo": true
+            },
+            "buildsystem": "simple",
+            "build-commands": [
+                "mkdir -p /app/cef/libcef_dll_wrapper",
+                "cp -R ./include /app/cef",
+                "cp -R ./Release /app/cef",
+                "cp -R ./Resources /app/cef",
+                "cp -R ./build/libcef_dll_wrapper/libcef_dll_wrapper.a /app/cef/libcef_dll_wrapper"
+            ],
+            "cleanup": [
+                "*"
+            ],
+            "sources": [
+                {
+                    "type": "archive",
+                    "url": "https://cdn-fastly.obsproject.com/downloads/cef_binary_7871_linux_x86_64.tar.xz",
+                    "sha256": "8ffc64d06ea74da613eeda7f2aa5d4e98661af6fa3ed8c68724c9a6e4e89ea8e"
+                }
+            ]
+        },
+        {
             "name": "obs",
             "buildsystem": "cmake-ninja",
             "builddir": true,
@@ -106,7 +130,10 @@
                 "-DCMAKE_INCLUDE_PATH=/app/include;/usr/include",
                 "-DENABLE_FLATPAK=ON",
                 "-DENABLE_WAYLAND=ON",
-                "-DENABLE_BROWSER=OFF",
+                "-DENABLE_BROWSER=ON",
+                "-DCEF_ROOT_DIR=/app/cef",
+                "-DENABLE_SCRIPTING=ON",
+                "-DENABLE_WEBRTC=ON",
                 "-DENABLE_ALSA=OFF",
                 "-DENABLE_PULSEAUDIO=ON",
                 "-DENABLE_JACK=ON",
@@ -115,7 +142,7 @@
                 "-DENABLE_LIBFDK=ON",
                 "-DENABLE_QSV11=ON",
                 "-DENABLE_DECKLINK=OFF",
-                "-DOBS_VERSION_OVERRIDE=0.1.1"
+                "-DOBS_VERSION_OVERRIDE=0.2.0"
             ],
             "post-install": [
                 "install -d /app/plugins",

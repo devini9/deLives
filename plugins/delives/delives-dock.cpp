@@ -7,6 +7,7 @@ extern "C" {
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
+#include <obs.h>
 
 #include <QWidget>
 #include <QVBoxLayout>
@@ -310,6 +311,29 @@ static void setup_dock()
 	testResultEdit->setMaximumHeight(100);
 	testLayout->addWidget(testResultEdit);
 	layout->addWidget(testGroup);
+
+	// Game capture section
+	QGroupBox *gameCaptureGroup = new QGroupBox("Game Capture");
+	QVBoxLayout *gameCaptureLayout = new QVBoxLayout(gameCaptureGroup);
+	QPushButton *captureGameBtn = new QPushButton(QString::fromUtf8("🎮 Capturar Jogo"));
+	QLabel *gameCaptureHint = new QLabel("Para jogos via Proton/Steam, use o modo janela ou gamescope para captura limpa");
+	gameCaptureHint->setWordWrap(true);
+	gameCaptureHint->setStyleSheet("color: gray;");
+	QObject::connect(captureGameBtn, &QPushButton::clicked, []() {
+		obs_source_t *source = obs_source_create("pipewire-window-capture-source",
+							 "Capturar Jogo", nullptr, nullptr);
+		if (source) {
+			obs_scene_t *scene = obs_scene_from_source(obs_frontend_get_current_scene());
+			if (scene) {
+				obs_scene_add(scene, source);
+			}
+			obs_frontend_open_source_properties(source);
+			obs_source_release(source);
+		}
+	});
+	gameCaptureLayout->addWidget(captureGameBtn);
+	gameCaptureLayout->addWidget(gameCaptureHint);
+	layout->addWidget(gameCaptureGroup);
 
 	// RTMP label
 	rtmpLabel = new QLabel("rtmp://a.rtmp.youtube.com/live2");
