@@ -989,8 +989,8 @@ void OBSBasic::OBSInit()
 	{
 		bool advancedMode = config_get_bool(App()->GetUserConfig(), "BasicWindow", "DelivesMode");
 		if (!config_has_user_value(App()->GetUserConfig(), "BasicWindow", "DelivesMode")) {
-			advancedMode = true;
-			config_set_bool(App()->GetUserConfig(), "BasicWindow", "DelivesMode", true);
+			advancedMode = false;
+			config_set_bool(App()->GetUserConfig(), "BasicWindow", "DelivesMode", false);
 			config_save_safe(App()->GetUserConfig(), "tmp", nullptr);
 		}
 		if (ui->actionToggleDelivesMode) {
