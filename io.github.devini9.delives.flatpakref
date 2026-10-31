@@ -1,0 +1,8 @@
+[Flatpak Ref]
+Title=deLives — live streaming para YouTube
+Name=io.github.devini9.delives
+Branch=master
+Url=https://devini9.github.io/deLives/
+IsRuntime=false
+Comment=Fork do OBS Studio com painel deLives
+RuntimeRepo=https://flathub.org/repo/flathub.flatpakrepo
