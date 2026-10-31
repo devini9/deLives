@@ -985,6 +985,23 @@ void OBSBasic::OBSInit()
 	if (contextVisible) {
 		UpdateContextBar(true);
 	}
+
+	if (config_get_bool(App()->GetUserConfig(), "BasicWindow", "DelivesMode")) {
+		if (ui->actionToggleDelivesMode)
+			ui->actionToggleDelivesMode->setChecked(true);
+		if (menuBar())
+			menuBar()->setVisible(false);
+		if (ui->statusbar)
+			ui->statusbar->setVisible(false);
+		if (ui->scenesToolbar)
+			ui->scenesToolbar->setVisible(false);
+		if (ui->sourcesToolbar)
+			ui->sourcesToolbar->setVisible(false);
+		if (ui->toggleListboxToolbars)
+			ui->toggleListboxToolbars->setChecked(false);
+		if (ui->toggleStatusBar)
+			ui->toggleStatusBar->setChecked(false);
+	}
 	UpdateEditMenu();
 
 	{
@@ -2098,4 +2115,41 @@ OBSPromptResult OBSBasic::PromptForName(const OBSPromptRequest &request, const O
 void OBSBasic::on_actionOpenPluginManager_triggered()
 {
 	App()->pluginManagerOpenDialog();
+}
+
+void OBSBasic::on_actionToggleDelivesMode_triggered(bool checked)
+{
+	config_set_bool(App()->GetUserConfig(), "BasicWindow", "DelivesMode", checked);
+	config_save_safe(App()->GetUserConfig(), "tmp", nullptr);
+
+	if (checked) {
+		if (menuBar())
+			menuBar()->setVisible(false);
+		if (ui->statusbar)
+			ui->statusbar->setVisible(false);
+		if (ui->scenesToolbar)
+			ui->scenesToolbar->setVisible(false);
+		if (ui->sourcesToolbar)
+			ui->sourcesToolbar->setVisible(false);
+		if (ui->toggleListboxToolbars)
+			ui->toggleListboxToolbars->setChecked(false);
+		if (ui->toggleStatusBar)
+			ui->toggleStatusBar->setChecked(false);
+	} else {
+		if (menuBar())
+			menuBar()->setVisible(true);
+		if (ui->statusbar) {
+			bool showStatus = config_get_bool(App()->GetUserConfig(), "BasicWindow", "ShowStatusBar");
+			ui->statusbar->setVisible(showStatus);
+			if (ui->toggleStatusBar)
+				ui->toggleStatusBar->setChecked(showStatus);
+		}
+		if (ui->scenesToolbar) {
+			bool showList = config_get_bool(App()->GetUserConfig(), "BasicWindow", "ShowListboxToolbars");
+			ui->scenesToolbar->setVisible(showList);
+			ui->sourcesToolbar->setVisible(showList);
+			if (ui->toggleListboxToolbars)
+				ui->toggleListboxToolbars->setChecked(showList);
+		}
+	}
 }

@@ -22,6 +22,10 @@ extern "C" {
 #include <QTimer>
 #include <QMessageBox>
 #include <QToolTip>
+#include <QClipboard>
+#include <QApplication>
+#include <QUrl>
+#include <QUrlQuery>
 
 static const SecretSchema DELIVES_SCHEMA = {
 	"io.github.devini9.delives",
@@ -44,6 +48,9 @@ static QPushButton *applyPresetBtn = nullptr;
 static QPushButton *testLiveBtn = nullptr;
 static QPlainTextEdit *testResultEdit = nullptr;
 static QLabel *rtmpLabel = nullptr;
+
+static QLineEdit *ytChatUrlEdit = nullptr;
+static QPushButton *ytChatConnectBtn = nullptr;
 
 static QTimer *testTimer = nullptr;
 
@@ -260,6 +267,54 @@ static void test_live_clicked()
 	testTimer->start(60000);
 }
 
+static void connect_yt_chat_clicked()
+{
+	if (!ytChatUrlEdit)
+		return;
+
+	QString urlText = ytChatUrlEdit->text().trimmed();
+	if (urlText.isEmpty())
+		return;
+
+	QString videoId;
+	QUrl url(urlText);
+	if (url.isValid()) {
+		if (url.host().contains("youtube.com")) {
+			if (url.path().contains("/watch")) {
+				QUrlQuery query(url);
+				videoId = query.queryItemValue("v");
+			} else if (url.path().startsWith("/live/")) {
+				videoId = url.path().split('/').last().split('?').first();
+			} else if (url.path().contains("/live_chat")) {
+				QUrlQuery query(url);
+				videoId = query.queryItemValue("v");
+			}
+		} else if (url.host().contains("youtu.be")) {
+			videoId = url.path().remove('/').split('?').first();
+		}
+	}
+
+	if (videoId.isEmpty()) {
+		QMessageBox::information(delives_dock_widget, "deLives",
+					"Não foi possível extrair o ID do vídeo/live da URL fornecida.");
+		return;
+	}
+
+	QString chatUrl = QString("https://www.youtube.com/live_chat?v=%1").arg(videoId);
+
+	QClipboard *clipboard = QApplication::clipboard();
+	if (clipboard) {
+		clipboard->setText(chatUrl);
+	}
+
+	QMessageBox::information(delives_dock_widget, "deLives",
+					QString("URL do chat copiada para a área de transferência:\n%1\n\n"
+						"Passos:\n"
+						"1) Docks → Adicionar novo dock de navegador\n"
+						"2) Colar a URL copiada\n"
+						"3) Definir título \"Chat da live\"").arg(chatUrl));
+}
+
 static void setup_dock()
 {
 	delives_dock_widget = new QWidget();
@@ -311,6 +366,17 @@ static void setup_dock()
 	testResultEdit->setMaximumHeight(100);
 	testLayout->addWidget(testResultEdit);
 	layout->addWidget(testGroup);
+
+	// YouTube Chat section
+	QGroupBox *chatGroup = new QGroupBox(QString::fromUtf8("💬 Chat do YouTube"));
+	QVBoxLayout *chatLayout = new QVBoxLayout(chatGroup);
+	ytChatUrlEdit = new QLineEdit();
+	ytChatUrlEdit->setPlaceholderText("URL do vídeo/live");
+	ytChatConnectBtn = new QPushButton("Conectar chat");
+	QObject::connect(ytChatConnectBtn, &QPushButton::clicked, connect_yt_chat_clicked);
+	chatLayout->addWidget(ytChatUrlEdit);
+	chatLayout->addWidget(ytChatConnectBtn);
+	layout->addWidget(chatGroup);
 
 	// Game capture section
 	QGroupBox *gameCaptureGroup = new QGroupBox("Game Capture");

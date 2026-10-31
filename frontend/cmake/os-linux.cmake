@@ -59,25 +59,25 @@ install(
 install(FILES cmake/linux/io.github.devini9.delives.desktop DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
 
 install(
-  FILES cmake/linux/icons/obs-logo-128.png
+  FILES cmake/linux/icons/io.github.devini9.delives-128.png
+  RENAME io.github.devini9.delives.png
   DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/128x128/apps"
-  RENAME io.github.devini9.delives.png
 )
 
 install(
-  FILES cmake/linux/icons/obs-logo-256.png
+  FILES cmake/linux/icons/io.github.devini9.delives-256.png
+  RENAME io.github.devini9.delives.png
   DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps"
-  RENAME io.github.devini9.delives.png
 )
 
 install(
-  FILES cmake/linux/icons/obs-logo-512.png
+  FILES cmake/linux/icons/io.github.devini9.delives-512.png
+  RENAME io.github.devini9.delives.png
   DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/512x512/apps"
-  RENAME io.github.devini9.delives.png
 )
 
 install(
-  FILES cmake/linux/icons/obs-logo-scalable.svg
-  DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/scalable/apps"
+  FILES cmake/linux/icons/io.github.devini9.delives-scalable.svg
   RENAME io.github.devini9.delives.svg
+  DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/scalable/apps"
 )

@@ -524,6 +524,11 @@ void OBSBasicSourceSelect::rebuildSourceTypeList()
 		}
 	}
 
+	QListWidgetItem *delivesGameItem = new QListWidgetItem(ui->sourceTypeList);
+	delivesGameItem->setData(Qt::DisplayRole, QString::fromUtf8("🎮 Capturar Jogo"));
+	delivesGameItem->setData(kUnversionedIdRole, "delives-game-capture");
+	delivesGameItem->setIcon(main->GetSourceIcon("pipewire-window-capture-source"));
+
 	QListWidgetItem *newItem = new QListWidgetItem(ui->sourceTypeList);
 	newItem->setData(Qt::DisplayRole, Str("Basic.Scene"));
 	newItem->setData(kUnversionedIdRole, "scene");
@@ -741,6 +746,80 @@ void OBSBasicSourceSelect::createNew()
 	}
 
 	if (selectedTypeId.compare("scene") == 0) {
+		return;
+	}
+
+	if (selectedTypeId.compare("delives-game-capture") == 0) {
+		OBSBasic *main = reinterpret_cast<OBSBasic *>(App()->GetMainWindow());
+		OBSScene scene = main->GetCurrentScene();
+		if (!scene) {
+			return;
+		}
+
+		obs_source_t *source = obs_source_create("pipewire-window-capture-source", "Jogo", nullptr, nullptr);
+		if (!source) {
+			return;
+		}
+
+		std::optional<OBSSceneItem> addResult = setupExistingSource(obs_source_get_uuid(source), visible, false);
+		if (!addResult.has_value()) {
+			obs_source_release(source);
+			return;
+		}
+
+		OBSSceneItem item = addResult.value();
+		std::string sceneUuid = obs_source_get_uuid(main->GetCurrentSceneSource());
+		std::string sourceUuid = obs_source_get_uuid(source);
+		std::string newName = "Jogo";
+
+		auto undo = [sceneUuid](const std::string &data) {
+			OBSBasic *main = OBSBasic::Get();
+
+			OBSSourceAutoRelease source = obs_get_source_by_uuid(data.c_str());
+			obs_source_remove(source);
+
+			OBSSourceAutoRelease sceneSource = obs_get_source_by_uuid(sceneUuid.c_str());
+			main->SetCurrentScene(sceneSource.Get(), true);
+		};
+		OBSDataAutoRelease wrapper = obs_data_create();
+		obs_data_set_string(wrapper, "id", "pipewire-window-capture-source");
+		obs_data_set_int(wrapper, "item_id", obs_sceneitem_get_id(item));
+		obs_data_set_string(wrapper, "name", newName.c_str());
+		obs_data_set_bool(wrapper, "visible", visible);
+
+		auto redo = [sceneUuid](const std::string &data) {
+			OBSBasic *main = OBSBasic::Get();
+
+			OBSSourceAutoRelease sceneSource = obs_get_source_by_uuid(sceneUuid.c_str());
+			main->SetCurrentScene(sceneSource.Get(), true);
+
+			OBSDataAutoRelease dat = obs_data_create_from_json(data.c_str());
+
+			obs_source_t *source = obs_source_create("pipewire-window-capture-source",
+								 obs_data_get_string(dat, "name"),
+								 nullptr, nullptr);
+			if (!source) {
+				return;
+			}
+
+			std::optional<OBSSceneItem> addResult =
+				setupExistingSource(obs_source_get_uuid(source), obs_data_get_bool(dat, "visible"), false);
+			if (!addResult.has_value()) {
+				obs_source_release(source);
+				return;
+			}
+
+			OBSSceneItem item = addResult.value();
+			obs_sceneitem_set_id(item, static_cast<int64_t>(obs_data_get_int(dat, "item_id")));
+			obs_source_release(source);
+		};
+		undo_s.add_action(QTStr("Undo.Add").arg(QString::fromStdString(newName)), undo, redo, sourceUuid,
+				  std::string(obs_data_get_json(wrapper)));
+
+		main->CreatePropertiesWindow(source);
+		obs_source_release(source);
+
+		close();
 		return;
 	}
 

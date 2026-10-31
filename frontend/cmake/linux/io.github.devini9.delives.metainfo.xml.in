@@ -29,6 +29,12 @@
   </recommends>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.3.0" date="2026-10-31">
+      <description>
+        <p>Modo deLives, chat do YouTube, Capturar Jogo nativo no menu + de Fontes, ícone novo</p>
+      </description>
+      <url type="details">https://github.com/devini9/deLives</url>
+    </release>
     <release version="0.2.0" date="2026-10-31">
       <description>
         <p>Browser/scripting/WebRTC ativados + Capturar Jogo</p>

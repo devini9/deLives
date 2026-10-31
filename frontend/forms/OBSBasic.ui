@@ -950,6 +950,7 @@
     <addaction name="idianPlayground"/>
     <addaction name="actionOpenPluginManager"/>
     <addaction name="separator"/>
+    <addaction name="actionToggleDelivesMode"/>
    </widget>
    <widget class="QMenu" name="menuDocks">
     <property name="title">
@@ -2045,6 +2046,14 @@
   <action name="actionOpenPluginManager">
    <property name="text">
     <string>Basic.OpenPluginManager</string>
+   </property>
+  </action>
+  <action name="actionToggleDelivesMode">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Modo deLives</string>
    </property>
   </action>
   <action name="stats">
