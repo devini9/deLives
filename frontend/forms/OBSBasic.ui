@@ -2052,8 +2052,11 @@
    <property name="checkable">
     <bool>true</bool>
    </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
    <property name="text">
-    <string>Modo deLives</string>
+    <string>Modo avançado (menus completos)</string>
    </property>
   </action>
   <action name="stats">

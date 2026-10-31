@@ -26,6 +26,9 @@ extern "C" {
 #include <QApplication>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QAction>
+#include <QMainWindow>
+#include <QMenuBar>
 
 static const SecretSchema DELIVES_SCHEMA = {
 	"io.github.devini9.delives",
@@ -400,6 +403,39 @@ static void setup_dock()
 	gameCaptureLayout->addWidget(captureGameBtn);
 	gameCaptureLayout->addWidget(gameCaptureHint);
 	layout->addWidget(gameCaptureGroup);
+
+	// Advanced mode toggle
+	QPushButton *advancedModeBtn = new QPushButton(QString::fromUtf8("⚙ Modo avançado"));
+	QObject::connect(advancedModeBtn, &QPushButton::clicked, []() {
+		config_t *userConfig = obs_frontend_get_user_config();
+		if (!userConfig)
+			return;
+		bool checked = config_get_bool(userConfig, "BasicWindow", "DelivesMode");
+		checked = !checked;
+		config_set_bool(userConfig, "BasicWindow", "DelivesMode", checked);
+		config_save_safe(userConfig, "tmp", nullptr);
+		void *mainWindow = obs_frontend_get_main_window();
+		if (mainWindow) {
+			QMainWindow *mw = static_cast<QMainWindow *>(mainWindow);
+			if (mw->menuBar())
+				mw->menuBar()->setVisible(checked);
+			QAction *action = nullptr;
+			// Try to find action by object name through menu actions
+			QList<QAction *> actions = mw->findChildren<QAction *>();
+			for (QAction *a : actions) {
+				if (a->objectName() == "actionToggleDelivesMode") {
+					action = a;
+					break;
+				}
+			}
+			if (action) {
+				action->setChecked(checked);
+			}
+		}
+		QMessageBox::information(delives_dock_widget, "deLives",
+					checked ? "Modo avançado ativado (menus completos)." : "Modo avançado desativado.");
+	});
+	layout->addWidget(advancedModeBtn);
 
 	// RTMP label
 	rtmpLabel = new QLabel("rtmp://a.rtmp.youtube.com/live2");

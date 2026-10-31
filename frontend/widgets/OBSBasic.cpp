@@ -986,21 +986,52 @@ void OBSBasic::OBSInit()
 		UpdateContextBar(true);
 	}
 
-	if (config_get_bool(App()->GetUserConfig(), "BasicWindow", "DelivesMode")) {
-		if (ui->actionToggleDelivesMode)
-			ui->actionToggleDelivesMode->setChecked(true);
+	{
+		bool advancedMode = config_get_bool(App()->GetUserConfig(), "BasicWindow", "DelivesMode");
+		if (!config_has_user_value(App()->GetUserConfig(), "BasicWindow", "DelivesMode")) {
+			advancedMode = true;
+			config_set_bool(App()->GetUserConfig(), "BasicWindow", "DelivesMode", true);
+			config_save_safe(App()->GetUserConfig(), "tmp", nullptr);
+		}
+		if (ui->actionToggleDelivesMode) {
+			ui->actionToggleDelivesMode->setChecked(advancedMode);
+		}
 		if (menuBar())
-			menuBar()->setVisible(false);
-		if (ui->statusbar)
-			ui->statusbar->setVisible(false);
-		if (ui->scenesToolbar)
-			ui->scenesToolbar->setVisible(false);
-		if (ui->sourcesToolbar)
-			ui->sourcesToolbar->setVisible(false);
-		if (ui->toggleListboxToolbars)
-			ui->toggleListboxToolbars->setChecked(false);
-		if (ui->toggleStatusBar)
-			ui->toggleStatusBar->setChecked(false);
+			menuBar()->setVisible(advancedMode);
+		if (ui->statusbar) {
+			if (advancedMode) {
+				bool showStatus = config_get_bool(App()->GetUserConfig(), "BasicWindow", "ShowStatusBar");
+				if (!config_has_user_value(App()->GetUserConfig(), "BasicWindow", "ShowStatusBar"))
+					showStatus = true;
+				ui->statusbar->setVisible(showStatus);
+				if (ui->toggleStatusBar)
+					ui->toggleStatusBar->setChecked(showStatus);
+			} else {
+				ui->statusbar->setVisible(false);
+				if (ui->toggleStatusBar)
+					ui->toggleStatusBar->setChecked(false);
+			}
+		}
+		if (ui->scenesToolbar) {
+			if (advancedMode) {
+				bool showList = config_get_bool(App()->GetUserConfig(), "BasicWindow", "ShowListboxToolbars");
+				if (!config_has_user_value(App()->GetUserConfig(), "BasicWindow", "ShowListboxToolbars"))
+					showList = true;
+				ui->scenesToolbar->setVisible(showList);
+				ui->sourcesToolbar->setVisible(showList);
+				if (ui->toggleListboxToolbars)
+					ui->toggleListboxToolbars->setChecked(showList);
+			} else {
+				ui->scenesToolbar->setVisible(false);
+				ui->sourcesToolbar->setVisible(false);
+				if (ui->toggleListboxToolbars)
+					ui->toggleListboxToolbars->setChecked(false);
+			}
+		}
+		if (!advancedMode) {
+			if (menuBar())
+				menuBar()->setVisible(false);
+		}
 	}
 	UpdateEditMenu();
 
@@ -1994,28 +2025,7 @@ void OBSBasic::UpdateEditMenu()
 
 void OBSBasic::UpdateTitleBar()
 {
-	stringstream name;
-
-	const char *profile = config_get_string(App()->GetUserConfig(), "Basic", "Profile");
-	const char *sceneCollection = config_get_string(App()->GetUserConfig(), "Basic", "SceneCollection");
-
-	name << "OBS ";
-	if (previewProgramMode) {
-		name << "Studio ";
-	}
-
-	name << App()->GetVersionString(false);
-	if (safe_mode) {
-		name << " (" << Str("TitleBar.SafeMode") << ")";
-	}
-	if (App()->IsPortableMode()) {
-		name << " - " << Str("TitleBar.PortableMode");
-	}
-
-	name << " - " << Str("TitleBar.Profile") << ": " << profile;
-	name << " - " << Str("TitleBar.Scenes") << ": " << sceneCollection;
-
-	setWindowTitle(QT_UTF8(name.str().c_str()));
+	setWindowTitle("deLives");
 }
 
 OBSBasic *OBSBasic::Get()
@@ -2124,6 +2134,26 @@ void OBSBasic::on_actionToggleDelivesMode_triggered(bool checked)
 
 	if (checked) {
 		if (menuBar())
+			menuBar()->setVisible(true);
+		if (ui->statusbar) {
+			bool showStatus = config_get_bool(App()->GetUserConfig(), "BasicWindow", "ShowStatusBar");
+			if (!config_has_user_value(App()->GetUserConfig(), "BasicWindow", "ShowStatusBar"))
+				showStatus = true;
+			ui->statusbar->setVisible(showStatus);
+			if (ui->toggleStatusBar)
+				ui->toggleStatusBar->setChecked(showStatus);
+		}
+		if (ui->scenesToolbar) {
+			bool showList = config_get_bool(App()->GetUserConfig(), "BasicWindow", "ShowListboxToolbars");
+			if (!config_has_user_value(App()->GetUserConfig(), "BasicWindow", "ShowListboxToolbars"))
+				showList = true;
+			ui->scenesToolbar->setVisible(showList);
+			ui->sourcesToolbar->setVisible(showList);
+			if (ui->toggleListboxToolbars)
+				ui->toggleListboxToolbars->setChecked(showList);
+		}
+	} else {
+		if (menuBar())
 			menuBar()->setVisible(false);
 		if (ui->statusbar)
 			ui->statusbar->setVisible(false);
@@ -2135,21 +2165,5 @@ void OBSBasic::on_actionToggleDelivesMode_triggered(bool checked)
 			ui->toggleListboxToolbars->setChecked(false);
 		if (ui->toggleStatusBar)
 			ui->toggleStatusBar->setChecked(false);
-	} else {
-		if (menuBar())
-			menuBar()->setVisible(true);
-		if (ui->statusbar) {
-			bool showStatus = config_get_bool(App()->GetUserConfig(), "BasicWindow", "ShowStatusBar");
-			ui->statusbar->setVisible(showStatus);
-			if (ui->toggleStatusBar)
-				ui->toggleStatusBar->setChecked(showStatus);
-		}
-		if (ui->scenesToolbar) {
-			bool showList = config_get_bool(App()->GetUserConfig(), "BasicWindow", "ShowListboxToolbars");
-			ui->scenesToolbar->setVisible(showList);
-			ui->sourcesToolbar->setVisible(showList);
-			if (ui->toggleListboxToolbars)
-				ui->toggleListboxToolbars->setChecked(showList);
-		}
 	}
 }

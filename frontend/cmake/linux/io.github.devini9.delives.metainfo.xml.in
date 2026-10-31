@@ -29,6 +29,12 @@
   </recommends>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.0" date="2026-10-31">
+      <description>
+        <p>Identidade deLives — sem cara de OBS. Modo avançado opcional revela menus completos.</p>
+      </description>
+      <url type="details">https://github.com/devini9/deLives</url>
+    </release>
     <release version="0.3.0" date="2026-10-31">
       <description>
         <p>Modo deLives, chat do YouTube, Capturar Jogo nativo no menu + de Fontes, ícone novo</p>
