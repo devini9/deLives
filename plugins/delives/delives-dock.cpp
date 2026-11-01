@@ -29,21 +29,28 @@ extern "C" {
 #include <QAction>
 #include <QMainWindow>
 #include <QMenuBar>
+#include <QComboBox>
+#include <QFileDialog>
+#include <QGroupBox>
+#include <string>
 
 static const SecretSchema DELIVES_SCHEMA = {
 	"io.github.devini9.delives",
 	SECRET_SCHEMA_NONE,
 	{
-		{"youtube-stream-key", SECRET_SCHEMA_ATTRIBUTE_STRING},
+		{"stream-key", SECRET_SCHEMA_ATTRIBUTE_STRING},
+		{"platform", SECRET_SCHEMA_ATTRIBUTE_STRING},
 		{NULL, (SecretSchemaAttributeType)0},
 	},
 };
 
 static QWidget *delives_dock_widget = nullptr;
 
+static QComboBox *platformCombo = nullptr;
 static QLineEdit *keyEdit = nullptr;
 static QLabel *keyStatusLabel = nullptr;
 static QPushButton *saveKeyBtn = nullptr;
+static QLabel *platformStatusLabel = nullptr;
 static QRadioButton *preset1080p = nullptr;
 static QRadioButton *preset1440p = nullptr;
 static QRadioButton *preset4kp = nullptr;
@@ -54,6 +61,7 @@ static QLabel *rtmpLabel = nullptr;
 
 static QLineEdit *ytChatUrlEdit = nullptr;
 static QPushButton *ytChatConnectBtn = nullptr;
+static QPushButton *chatOverlayBtn = nullptr;
 
 static QTimer *testTimer = nullptr;
 
@@ -61,7 +69,7 @@ static void update_button_states()
 {
 	bool hasKey = false;
 	if (keyStatusLabel) {
-		hasKey = (keyStatusLabel->text() == QString("saved"));
+		hasKey = (keyStatusLabel->text() == QString("salvo") || keyStatusLabel->text() == QString("saved"));
 	}
 	if (applyPresetBtn)
 		applyPresetBtn->setEnabled(hasKey);
@@ -69,9 +77,9 @@ static void update_button_states()
 		testLiveBtn->setEnabled(hasKey);
 	if (!hasKey) {
 		if (applyPresetBtn)
-			applyPresetBtn->setToolTip(QString("Save stream key first"));
+			applyPresetBtn->setToolTip(QString("Salve a chave da stream primeiro"));
 		if (testLiveBtn)
-			testLiveBtn->setToolTip(QString("Save stream key first"));
+			testLiveBtn->setToolTip(QString("Salve a chave da stream primeiro"));
 	} else {
 		if (applyPresetBtn)
 			applyPresetBtn->setToolTip(QString(""));
@@ -80,52 +88,123 @@ static void update_button_states()
 	}
 }
 
+static QString get_current_platform()
+{
+	if (platformCombo) {
+		return platformCombo->currentData().toString();
+	}
+	return "youtube";
+}
+
+static QString get_rtmp_url_for_platform(const QString &platform)
+{
+	if (platform == "kick")
+		return "rtmp://fa723fc1a1719.global-contribute.live-video.net";
+	if (platform == "twitch")
+		return "rtmp://live.twitch.tv/app";
+	return "rtmp://a.rtmp.youtube.com/live2";
+}
+
+static void update_rtmp_display()
+{
+	QString platform = get_current_platform();
+	QString rtmp = get_rtmp_url_for_platform(platform);
+	if (rtmpLabel)
+		rtmpLabel->setText(rtmp);
+}
+
+static void check_saved_key();
+
+static void platform_changed(int)
+{
+	update_rtmp_display();
+	check_saved_key();
+}
+
 static void check_saved_key()
 {
+	QString platform = get_current_platform();
 	GError *error = nullptr;
 	gchar *password = secret_password_lookup_sync(&DELIVES_SCHEMA,
 						     nullptr, &error,
-						     "youtube-stream-key",
+						     "stream-key",
 						     "true",
+						     "platform", platform.toUtf8().constData(),
 						     NULL);
 	if (error) {
 		g_error_free(error);
 		error = nullptr;
 	}
 	if (password && strlen(password) > 0) {
-		keyStatusLabel->setText(QString("saved"));
+		if (keyStatusLabel)
+			keyStatusLabel->setText(QString("salvo"));
+		if (platformStatusLabel) {
+			if (platform == "youtube")
+				platformStatusLabel->setText(QString("Plataforma ativa: YouTube"));
+			else if (platform == "kick")
+				platformStatusLabel->setText(QString("Plataforma ativa: Kick"));
+			else if (platform == "twitch")
+				platformStatusLabel->setText(QString("Plataforma ativa: Twitch"));
+			else
+				platformStatusLabel->setText(QString("Plataforma ativa"));
+		}
 		secret_password_free(password);
 	} else {
 		if (password)
 			secret_password_free(password);
-		keyStatusLabel->setText(QString("not saved"));
+		if (keyStatusLabel)
+			keyStatusLabel->setText(QString("não salvo"));
+		if (platformStatusLabel) {
+			if (platform == "youtube")
+				platformStatusLabel->setText(QString("Plataforma: YouTube"));
+			else if (platform == "kick")
+				platformStatusLabel->setText(QString("Plataforma: Kick"));
+			else if (platform == "twitch")
+				platformStatusLabel->setText(QString("Plataforma: Twitch"));
+			else
+				platformStatusLabel->setText(QString("Plataforma"));
+		}
 	}
 	update_button_states();
 }
 
 static void save_key_clicked()
 {
+	if (!keyEdit)
+		return;
 	QString key = keyEdit->text();
 	if (key.isEmpty()) {
 		return;
 	}
+	QString platform = get_current_platform();
+	QString label;
+	if (platform == "youtube")
+		label = "deLives YouTube Stream Key";
+	else if (platform == "kick")
+		label = "deLives Kick Stream Key";
+	else if (platform == "twitch")
+		label = "deLives Twitch Stream Key";
+	else
+		label = "deLives Stream Key";
 	GError *error = nullptr;
 	gboolean result = secret_password_store_sync(&DELIVES_SCHEMA,
 						    SECRET_COLLECTION_DEFAULT,
-						    "deLives YouTube Stream Key",
+						    label.toUtf8().constData(),
 						    key.toUtf8().constData(),
 						    nullptr, &error,
-						    "youtube-stream-key",
+						    "stream-key",
 						    "true",
+						    "platform", platform.toUtf8().constData(),
 						    NULL);
 	if (error) {
 		g_error_free(error);
-		keyStatusLabel->setText(QString("not saved"));
+		if (keyStatusLabel)
+			keyStatusLabel->setText(QString("não salvo"));
 	} else {
-		if (result)
-			keyStatusLabel->setText(QString("saved"));
-		else
-			keyStatusLabel->setText(QString("not saved"));
+		if (result && keyStatusLabel)
+			keyStatusLabel->setText(QString("salvo"));
+		else if (keyStatusLabel)
+			keyStatusLabel->setText(QString("não salvo"));
 	}
 	keyEdit->clear();
 	update_button_states();
@@ -223,15 +302,17 @@ static void test_live_finished()
 
 static void test_live_clicked()
 {
-	if (!keyStatusLabel || keyStatusLabel->text() != QString("saved")) {
+	if (!keyStatusLabel || !(keyStatusLabel->text() == QString("salvo") || keyStatusLabel->text() == QString("saved"))) {
 		return;
 	}
 
+	QString platform = get_current_platform();
 	GError *error = nullptr;
 	gchar *password = secret_password_lookup_sync(&DELIVES_SCHEMA,
 						     nullptr, &error,
-						     "youtube-stream-key",
+						     "stream-key",
 						     "true",
+						     "platform", platform.toUtf8().constData(),
 						     NULL);
 	if (error) {
 		g_error_free(error);
@@ -250,7 +331,7 @@ static void test_live_clicked()
 	}
 
 	obs_data_t *settings = obs_data_create();
-	obs_data_set_string(settings, "server", "rtmp://a.rtmp.youtube.com/live2");
+	obs_data_set_string(settings, "server", get_rtmp_url_for_platform(platform).toUtf8().constData());
 	obs_data_set_string(settings, "key", password);
 	obs_service_update(service, settings);
 	obs_data_release(settings);
@@ -260,7 +341,8 @@ static void test_live_clicked()
 
 	if (testLiveBtn)
 		testLiveBtn->setEnabled(false);
-	testResultEdit->clear();
+	if (testResultEdit)
+		testResultEdit->clear();
 
 	obs_frontend_streaming_start();
 
@@ -318,22 +400,103 @@ static void connect_yt_chat_clicked()
 						"3) Definir título \"Chat da live\"").arg(chatUrl));
 }
 
+static void create_source_quick(const char *id, const char *name, bool open_props)
+{
+	obs_source_t *source = obs_source_create(id, name, nullptr, nullptr);
+	if (source) {
+		obs_scene_t *scene = obs_scene_from_source(obs_frontend_get_current_scene());
+		if (scene) {
+			obs_scene_add(scene, source);
+		}
+		if (open_props)
+			obs_frontend_open_source_properties(source);
+		obs_source_release(source);
+	}
+}
+
+static void create_chat_overlay_clicked()
+{
+	QString urlText;
+	if (ytChatUrlEdit)
+		urlText = ytChatUrlEdit->text().trimmed();
+
+	QString videoId;
+	if (!urlText.isEmpty()) {
+		QUrl url(urlText);
+		if (url.isValid()) {
+			if (url.host().contains("youtube.com")) {
+				if (url.path().contains("/watch")) {
+					QUrlQuery query(url);
+					videoId = query.queryItemValue("v");
+				} else if (url.path().startsWith("/live/")) {
+					videoId = url.path().split('/').last().split('?').first();
+				} else if (url.path().contains("/live_chat")) {
+					QUrlQuery query(url);
+					videoId = query.queryItemValue("v");
+				}
+			} else if (url.host().contains("youtu.be")) {
+				videoId = url.path().remove('/').split('?').first();
+			}
+		}
+	}
+
+	QString chatUrl;
+	if (!videoId.isEmpty())
+		chatUrl = QString("https://www.youtube.com/live_chat?v=%1&embed_domain=localhost").arg(videoId);
+	else
+		chatUrl = QString("https://www.youtube.com/live_chat");
+
+	obs_data_t *settings = obs_data_create();
+	obs_data_set_string(settings, "url", chatUrl.toUtf8().constData());
+	obs_data_set_bool(settings, "is_local_file", false);
+	obs_source_t *source = obs_source_create("browser_source", "Chat da live", settings, nullptr);
+	obs_data_release(settings);
+	if (source) {
+		obs_scene_t *scene = obs_scene_from_source(obs_frontend_get_current_scene());
+		if (scene) {
+			obs_sceneitem_t *item = obs_scene_add(scene, source);
+			if (item) {
+				struct vec2 pos = {20.0f, 0.0f};
+				obs_sceneitem_set_pos(item, &pos);
+				struct vec2 scale = {0.4f, 0.4f};
+				obs_sceneitem_set_scale(item, &scale);
+				obs_sceneitem_set_alignment(item, OBS_ALIGN_LEFT | OBS_ALIGN_BOTTOM);
+			}
+		}
+		obs_frontend_open_source_properties(source);
+		obs_source_release(source);
+	}
+}
+
 static void setup_dock()
 {
 	delives_dock_widget = new QWidget();
 	QVBoxLayout *layout = new QVBoxLayout(delives_dock_widget);
 
+	// Platform section
+	QGroupBox *platformGroup = new QGroupBox(QString::fromUtf8("Plataforma"));
+	QVBoxLayout *platformLayout = new QVBoxLayout(platformGroup);
+	platformCombo = new QComboBox();
+	platformCombo->addItem(QString::fromUtf8("YouTube"), "youtube");
+	platformCombo->addItem(QString::fromUtf8("Kick"), "kick");
+	platformCombo->addItem(QString::fromUtf8("Twitch"), "twitch");
+	QObject::connect(platformCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), platform_changed);
+	platformLayout->addWidget(platformCombo);
+	platformStatusLabel = new QLabel(QString::fromUtf8("Plataforma: YouTube"));
+	platformLayout->addWidget(platformStatusLabel);
+	layout->addWidget(platformGroup);
+
 	// Stream key section
-	QGroupBox *keyGroup = new QGroupBox("YouTube Stream Key");
+	QGroupBox *keyGroup = new QGroupBox(QString::fromUtf8("Chave da stream"));
 	QVBoxLayout *keyLayout = new QVBoxLayout(keyGroup);
 	QHBoxLayout *keyInputLayout = new QHBoxLayout();
 	keyEdit = new QLineEdit();
 	keyEdit->setEchoMode(QLineEdit::Password);
-	keyEdit->setPlaceholderText("Chave de stream YouTube");
-	saveKeyBtn = new QPushButton("Salvar");
+	keyEdit->setPlaceholderText(QString::fromUtf8("Chave da stream"));
+	saveKeyBtn = new QPushButton(QString::fromUtf8("Salvar"));
 	keyInputLayout->addWidget(keyEdit);
 	keyInputLayout->addWidget(saveKeyBtn);
-	keyStatusLabel = new QLabel("not saved");
+	keyStatusLabel = new QLabel("não salvo");
 	keyLayout->addLayout(keyInputLayout);
 	keyLayout->addWidget(keyStatusLabel);
 	QObject::connect(saveKeyBtn, &QPushButton::clicked, save_key_clicked);
@@ -359,9 +522,9 @@ static void setup_dock()
 	layout->addWidget(presetGroup);
 
 	// Test live section
-	QGroupBox *testGroup = new QGroupBox("Live Test");
+	QGroupBox *testGroup = new QGroupBox(QString::fromUtf8("Teste de live"));
 	QVBoxLayout *testLayout = new QVBoxLayout(testGroup);
-	testLiveBtn = new QPushButton("Teste de live (60s)");
+	testLiveBtn = new QPushButton(QString::fromUtf8("Teste de live (60s)"));
 	QObject::connect(testLiveBtn, &QPushButton::clicked, test_live_clicked);
 	testLayout->addWidget(testLiveBtn);
 	testResultEdit = new QPlainTextEdit();
@@ -374,18 +537,69 @@ static void setup_dock()
 	QGroupBox *chatGroup = new QGroupBox(QString::fromUtf8("💬 Chat do YouTube"));
 	QVBoxLayout *chatLayout = new QVBoxLayout(chatGroup);
 	ytChatUrlEdit = new QLineEdit();
-	ytChatUrlEdit->setPlaceholderText("URL do vídeo/live");
-	ytChatConnectBtn = new QPushButton("Conectar chat");
+	ytChatUrlEdit->setPlaceholderText(QString::fromUtf8("URL do vídeo/live"));
+	ytChatConnectBtn = new QPushButton(QString::fromUtf8("Conectar chat"));
 	QObject::connect(ytChatConnectBtn, &QPushButton::clicked, connect_yt_chat_clicked);
 	chatLayout->addWidget(ytChatUrlEdit);
 	chatLayout->addWidget(ytChatConnectBtn);
+	chatOverlayBtn = new QPushButton(QString::fromUtf8("💬 Chat na live"));
+	QObject::connect(chatOverlayBtn, &QPushButton::clicked, create_chat_overlay_clicked);
+	chatLayout->addWidget(chatOverlayBtn);
 	layout->addWidget(chatGroup);
 
+	// Fast sources section
+	QGroupBox *fastSourcesGroup = new QGroupBox(QString::fromUtf8("Fontes rápidas"));
+	QVBoxLayout *fastSourcesLayout = new QVBoxLayout(fastSourcesGroup);
+	QPushButton *webcamBtn = new QPushButton(QString::fromUtf8("🎥 Webcam"));
+	QObject::connect(webcamBtn, &QPushButton::clicked, []() {
+		create_source_quick("v4l2_input", "Webcam", true);
+	});
+	QPushButton *imageBtn = new QPushButton(QString::fromUtf8("🖼️ Imagem"));
+	QObject::connect(imageBtn, &QPushButton::clicked, []() {
+		QString file = QFileDialog::getOpenFileName(delives_dock_widget, QString::fromUtf8("Selecionar imagem"), QString(), QString::fromUtf8("Imagens (*.png *.jpg *.jpeg *.bmp *.gif)"));
+		if (!file.isEmpty()) {
+			obs_data_t *settings = obs_data_create();
+			obs_data_set_string(settings, "file", file.toUtf8().constData());
+			obs_source_t *source = obs_source_create("image_source", "Imagem", settings, nullptr);
+			obs_data_release(settings);
+			if (source) {
+				obs_scene_t *scene = obs_scene_from_source(obs_frontend_get_current_scene());
+				if (scene) {
+					obs_scene_add(scene, source);
+				}
+				obs_frontend_open_source_properties(source);
+				obs_source_release(source);
+			}
+		}
+	});
+	QPushButton *mediaBtn = new QPushButton(QString::fromUtf8("🎬 Mídia"));
+	QObject::connect(mediaBtn, &QPushButton::clicked, []() {
+		QString file = QFileDialog::getOpenFileName(delives_dock_widget, QString::fromUtf8("Selecionar mídia"), QString(), QString::fromUtf8("Mídia (*.mp4 *.mkv *.webm *.mov *.avi *.mp3 *.ogg)"));
+		if (!file.isEmpty()) {
+			obs_data_t *settings = obs_data_create();
+			obs_data_set_string(settings, "local_file", file.toUtf8().constData());
+			obs_source_t *source = obs_source_create("ffmpeg_source", "Mídia", settings, nullptr);
+			obs_data_release(settings);
+			if (source) {
+				obs_scene_t *scene = obs_scene_from_source(obs_frontend_get_current_scene());
+				if (scene) {
+					obs_scene_add(scene, source);
+				}
+				obs_frontend_open_source_properties(source);
+				obs_source_release(source);
+			}
+		}
+	});
+	fastSourcesLayout->addWidget(webcamBtn);
+	fastSourcesLayout->addWidget(imageBtn);
+	fastSourcesLayout->addWidget(mediaBtn);
+	layout->addWidget(fastSourcesGroup);
+
 	// Game capture section
-	QGroupBox *gameCaptureGroup = new QGroupBox("Game Capture");
+	QGroupBox *gameCaptureGroup = new QGroupBox(QString::fromUtf8("Captura de jogo"));
 	QVBoxLayout *gameCaptureLayout = new QVBoxLayout(gameCaptureGroup);
 	QPushButton *captureGameBtn = new QPushButton(QString::fromUtf8("🎮 Capturar Jogo"));
-	QLabel *gameCaptureHint = new QLabel("Para jogos via Proton/Steam, use o modo janela ou gamescope para captura limpa");
+	QLabel *gameCaptureHint = new QLabel(QString::fromUtf8("Para jogos via Proton/Steam, use o modo janela ou gamescope para captura limpa"));
 	gameCaptureHint->setWordWrap(true);
 	gameCaptureHint->setStyleSheet("color: gray;");
 	QObject::connect(captureGameBtn, &QPushButton::clicked, []() {
@@ -438,12 +652,13 @@ static void setup_dock()
 	layout->addWidget(advancedModeBtn);
 
 	// RTMP label
-	rtmpLabel = new QLabel("rtmp://a.rtmp.youtube.com/live2");
+	rtmpLabel = new QLabel(get_rtmp_url_for_platform(get_current_platform()));
 	rtmpLabel->setStyleSheet("color: gray;");
 	layout->addWidget(rtmpLabel);
 
 	layout->addStretch();
 
+	update_rtmp_display();
 	check_saved_key();
 }
 
