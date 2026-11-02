@@ -1,5 +1,8 @@
 extern "C" {
 #include <libsecret/secret.h>
+#include <obs.h>
+#include <obs-encoder.h>
+#include <obs-service.h>
 }
 
 #include "delives-dock.hpp"
@@ -8,6 +11,7 @@ extern "C" {
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
 #include <obs.h>
+#include <graphics/vec2.h>
 
 #include <QWidget>
 #include <QVBoxLayout>
@@ -32,7 +36,9 @@ extern "C" {
 #include <QComboBox>
 #include <QFileDialog>
 #include <QGroupBox>
+#include <QCheckBox>
 #include <string>
+#include <vector>
 
 static const SecretSchema DELIVES_SCHEMA = {
 	"io.github.devini9.delives",
@@ -63,7 +69,22 @@ static QLineEdit *ytChatUrlEdit = nullptr;
 static QPushButton *ytChatConnectBtn = nullptr;
 static QPushButton *chatOverlayBtn = nullptr;
 
+// Multi-stream
+static QCheckBox *multiYtCheck = nullptr;
+static QCheckBox *multiKickCheck = nullptr;
+static QCheckBox *multiTwitchCheck = nullptr;
+
+// Multi-chat
+static QLineEdit *twitchChatChannelEdit = nullptr;
+static QPushButton *twitchChatOverlayBtn = nullptr;
+static QLineEdit *kickChatUrlEdit = nullptr;
+static QPushButton *kickChatOverlayBtn = nullptr;
+
 static QTimer *testTimer = nullptr;
+
+// Track multistream outputs
+static std::vector<obs_output_t *> multistream_outputs;
+static bool multistream_active = false;
 
 static void update_button_states()
 {
@@ -251,6 +272,124 @@ static void apply_preset_clicked()
 	config_save(global_config);
 	QMessageBox::information(delives_dock_widget, "deLives", 
 		"Preset applied. Reopen Settings to reflect changes.");
+}
+
+static void stop_multistream()
+{
+	if (multistream_active) {
+		for (auto *out : multistream_outputs) {
+			if (out && obs_output_active(out)) {
+				obs_output_stop(out);
+			}
+			if (out) {
+				obs_output_release(out);
+			}
+		}
+		multistream_outputs.clear();
+		multistream_active = false;
+	}
+}
+
+static void start_multistream()
+{
+	if (multistream_active) {
+		stop_multistream();
+	}
+
+	// Get encoders from current streaming output if available
+	obs_output_t *main_output = obs_frontend_get_streaming_output();
+	obs_encoder_t *venc = nullptr;
+	obs_encoder_t *aenc = nullptr;
+	if (main_output) {
+		venc = obs_output_get_video_encoder(main_output);
+		aenc = obs_output_get_audio_encoder(main_output, 0);
+		obs_output_release(main_output);
+	}
+
+	if (!venc) {
+		QMessageBox::information(delives_dock_widget, "deLives",
+					"Não foi possível obter o encoder de vídeo atual. Configure a transmissão normalmente primeiro ou use o encoder ativo.");
+		return;
+	}
+
+	struct PlatformInfo {
+		QString key;
+		bool checked;
+	};
+	std::vector<PlatformInfo> platforms;
+	if (multiYtCheck && multiYtCheck->isChecked())
+		platforms.push_back({"youtube", true});
+	if (multiKickCheck && multiKickCheck->isChecked())
+		platforms.push_back({"kick", true});
+	if (multiTwitchCheck && multiTwitchCheck->isChecked())
+		platforms.push_back({"twitch", true});
+
+	if (platforms.empty()) {
+		QMessageBox::information(delives_dock_widget, "deLives",
+					"Selecione pelo menos uma plataforma para multistream.");
+		return;
+	}
+
+	for (const auto &p : platforms) {
+		GError *error = nullptr;
+		gchar *password = secret_password_lookup_sync(&DELIVES_SCHEMA,
+							     nullptr, &error,
+							     "stream-key",
+							     "true",
+							     "platform", p.key.toUtf8().constData(),
+							     NULL);
+		if (error) {
+			g_error_free(error);
+			error = nullptr;
+		}
+		if (!password || strlen(password) == 0) {
+			if (password)
+				secret_password_free(password);
+			QString name = p.key == "youtube" ? "YouTube" : (p.key == "kick" ? "Kick" : "Twitch");
+			QMessageBox::information(delives_dock_widget, "deLives",
+						QString("Salve a chave da stream para %1 antes do multistream.").arg(name));
+			stop_multistream();
+			return;
+		}
+
+		obs_data_t *service_settings = obs_data_create();
+		obs_data_set_string(service_settings, "server", get_rtmp_url_for_platform(p.key).toUtf8().constData());
+		obs_data_set_string(service_settings, "key", password);
+		obs_service_t *service = obs_service_create("rtmp_custom", "delives_multistream_service", service_settings, nullptr);
+		obs_data_release(service_settings);
+		secret_password_free(password);
+
+		if (!service) {
+			stop_multistream();
+			return;
+		}
+
+		obs_output_t *output = obs_output_create("rtmp_output", QString("delives_multistream_%1").arg(p.key).toUtf8().constData(), nullptr, nullptr);
+		if (!output) {
+			obs_service_release(service);
+			stop_multistream();
+			return;
+		}
+
+		obs_output_set_service(output, service);
+		obs_output_set_video_encoder(output, venc);
+		if (aenc) {
+			obs_output_set_audio_encoder(output, aenc, 0);
+		}
+		obs_output_set_media(output, obs_get_video(), obs_get_audio());
+
+		if (!obs_output_start(output)) {
+			obs_output_release(output);
+			obs_service_release(service);
+			stop_multistream();
+			return;
+		}
+
+		multistream_outputs.push_back(output);
+		obs_service_release(service);
+	}
+
+	multistream_active = true;
 }
 
 static void test_live_finished()
@@ -486,6 +625,17 @@ static void setup_dock()
 	platformLayout->addWidget(platformStatusLabel);
 	layout->addWidget(platformGroup);
 
+	// Multistream section
+	QGroupBox *multiGroup = new QGroupBox(QString::fromUtf8("Multistream (transmitir em vários ao mesmo tempo)"));
+	QVBoxLayout *multiLayout = new QVBoxLayout(multiGroup);
+	multiYtCheck = new QCheckBox(QString::fromUtf8("YouTube"));
+	multiKickCheck = new QCheckBox(QString::fromUtf8("Kick"));
+	multiTwitchCheck = new QCheckBox(QString::fromUtf8("Twitch"));
+	multiLayout->addWidget(multiYtCheck);
+	multiLayout->addWidget(multiKickCheck);
+	multiLayout->addWidget(multiTwitchCheck);
+	layout->addWidget(multiGroup);
+
 	// Stream key section
 	QGroupBox *keyGroup = new QGroupBox(QString::fromUtf8("Chave da stream"));
 	QVBoxLayout *keyLayout = new QVBoxLayout(keyGroup);
@@ -521,6 +671,17 @@ static void setup_dock()
 	presetLayout->addWidget(applyPresetBtn);
 	layout->addWidget(presetGroup);
 
+	// Multistream control section
+	QGroupBox *multiCtrlGroup = new QGroupBox(QString::fromUtf8("Controle Multistream"));
+	QVBoxLayout *multiCtrlLayout = new QVBoxLayout(multiCtrlGroup);
+	QPushButton *multiStartBtn = new QPushButton(QString::fromUtf8("Iniciar Multistream"));
+	QPushButton *multiStopBtn = new QPushButton(QString::fromUtf8("Parar Multistream"));
+	QObject::connect(multiStartBtn, &QPushButton::clicked, start_multistream);
+	QObject::connect(multiStopBtn, &QPushButton::clicked, stop_multistream);
+	multiCtrlLayout->addWidget(multiStartBtn);
+	multiCtrlLayout->addWidget(multiStopBtn);
+	layout->addWidget(multiCtrlGroup);
+
 	// Test live section
 	QGroupBox *testGroup = new QGroupBox(QString::fromUtf8("Teste de live"));
 	QVBoxLayout *testLayout = new QVBoxLayout(testGroup);
@@ -533,19 +694,113 @@ static void setup_dock()
 	testLayout->addWidget(testResultEdit);
 	layout->addWidget(testGroup);
 
-	// YouTube Chat section
-	QGroupBox *chatGroup = new QGroupBox(QString::fromUtf8("💬 Chat do YouTube"));
-	QVBoxLayout *chatLayout = new QVBoxLayout(chatGroup);
+	// Chats section
+	QGroupBox *chatsGroup = new QGroupBox(QString::fromUtf8("Chats (3 simultâneos)"));
+	QVBoxLayout *chatsLayout = new QVBoxLayout(chatsGroup);
+
+	// YouTube
+	QGroupBox *ytChatGroup = new QGroupBox(QString::fromUtf8("💬 Chat do YouTube"));
+	QVBoxLayout *ytChatLayout = new QVBoxLayout(ytChatGroup);
 	ytChatUrlEdit = new QLineEdit();
 	ytChatUrlEdit->setPlaceholderText(QString::fromUtf8("URL do vídeo/live"));
 	ytChatConnectBtn = new QPushButton(QString::fromUtf8("Conectar chat"));
 	QObject::connect(ytChatConnectBtn, &QPushButton::clicked, connect_yt_chat_clicked);
-	chatLayout->addWidget(ytChatUrlEdit);
-	chatLayout->addWidget(ytChatConnectBtn);
-	chatOverlayBtn = new QPushButton(QString::fromUtf8("💬 Chat na live"));
+	ytChatLayout->addWidget(ytChatUrlEdit);
+	ytChatLayout->addWidget(ytChatConnectBtn);
+	chatOverlayBtn = new QPushButton(QString::fromUtf8("💬 Chat na live (YouTube)"));
 	QObject::connect(chatOverlayBtn, &QPushButton::clicked, create_chat_overlay_clicked);
-	chatLayout->addWidget(chatOverlayBtn);
-	layout->addWidget(chatGroup);
+	ytChatLayout->addWidget(chatOverlayBtn);
+	chatsLayout->addWidget(ytChatGroup);
+
+	// Twitch
+	QGroupBox *twitchChatGroup = new QGroupBox(QString::fromUtf8("💬 Chat da Twitch"));
+	QVBoxLayout *twitchChatLayout = new QVBoxLayout(twitchChatGroup);
+	twitchChatChannelEdit = new QLineEdit();
+	twitchChatChannelEdit->setPlaceholderText(QString::fromUtf8("Canal da Twitch (ex: nomecanal)"));
+	twitchChatOverlayBtn = new QPushButton(QString::fromUtf8("💬 Chat na live (Twitch)"));
+	QObject::connect(twitchChatOverlayBtn, &QPushButton::clicked, []() {
+		if (!twitchChatChannelEdit)
+			return;
+		QString channel = twitchChatChannelEdit->text().trimmed();
+		if (channel.isEmpty())
+			return;
+		if (channel.contains("/")) {
+			channel = channel.split('/').last().split('?').first();
+		}
+		QString chatUrl = QString("https://www.twitch.tv/embed/%1/chat?parent=localhost").arg(channel);
+		obs_data_t *settings = obs_data_create();
+		obs_data_set_string(settings, "url", chatUrl.toUtf8().constData());
+		obs_data_set_bool(settings, "is_local_file", false);
+		obs_source_t *source = obs_source_create("browser_source", "Chat da live - Twitch", settings, nullptr);
+		obs_data_release(settings);
+		if (source) {
+			obs_scene_t *scene = obs_scene_from_source(obs_frontend_get_current_scene());
+			if (scene) {
+				obs_sceneitem_t *item = obs_scene_add(scene, source);
+				if (item) {
+					struct vec2 pos = {20.0f, 0.0f};
+					obs_sceneitem_set_pos(item, &pos);
+					struct vec2 scale = {0.4f, 0.4f};
+					obs_sceneitem_set_scale(item, &scale);
+					obs_sceneitem_set_alignment(item, OBS_ALIGN_LEFT | OBS_ALIGN_BOTTOM);
+				}
+			}
+			obs_frontend_open_source_properties(source);
+			obs_source_release(source);
+		}
+	});
+	twitchChatLayout->addWidget(twitchChatChannelEdit);
+	twitchChatLayout->addWidget(twitchChatOverlayBtn);
+	chatsLayout->addWidget(twitchChatGroup);
+
+	// Kick
+	QGroupBox *kickChatGroup = new QGroupBox(QString::fromUtf8("💬 Chat da Kick"));
+	QVBoxLayout *kickChatLayout = new QVBoxLayout(kickChatGroup);
+	kickChatUrlEdit = new QLineEdit();
+	kickChatUrlEdit->setPlaceholderText(QString::fromUtf8("Canal da Kick ou URL"));
+	kickChatOverlayBtn = new QPushButton(QString::fromUtf8("💬 Chat na live (Kick)"));
+	QObject::connect(kickChatOverlayBtn, &QPushButton::clicked, []() {
+		if (!kickChatUrlEdit)
+			return;
+		QString input = kickChatUrlEdit->text().trimmed();
+		if (input.isEmpty())
+			return;
+		QString channel;
+		QUrl url(input);
+		if (url.isValid() && url.host().contains("kick.com")) {
+			QString path = url.path();
+			path = path.replace("/", "");
+			channel = path.split('?').first().split('#').first();
+		} else {
+			channel = input.replace("/", "");
+		}
+		QString chatUrl = QString("https://kick.com/%1/chatroom").arg(channel);
+		obs_data_t *settings = obs_data_create();
+		obs_data_set_string(settings, "url", chatUrl.toUtf8().constData());
+		obs_data_set_bool(settings, "is_local_file", false);
+		obs_source_t *source = obs_source_create("browser_source", "Chat da live - Kick", settings, nullptr);
+		obs_data_release(settings);
+		if (source) {
+			obs_scene_t *scene = obs_scene_from_source(obs_frontend_get_current_scene());
+			if (scene) {
+				obs_sceneitem_t *item = obs_scene_add(scene, source);
+				if (item) {
+					struct vec2 pos = {20.0f, 0.0f};
+					obs_sceneitem_set_pos(item, &pos);
+					struct vec2 scale = {0.4f, 0.4f};
+					obs_sceneitem_set_scale(item, &scale);
+					obs_sceneitem_set_alignment(item, OBS_ALIGN_LEFT | OBS_ALIGN_BOTTOM);
+				}
+			}
+			obs_frontend_open_source_properties(source);
+			obs_source_release(source);
+		}
+	});
+	kickChatLayout->addWidget(kickChatUrlEdit);
+	kickChatLayout->addWidget(kickChatOverlayBtn);
+	chatsLayout->addWidget(kickChatGroup);
+
+	layout->addWidget(chatsGroup);
 
 	// Fast sources section
 	QGroupBox *fastSourcesGroup = new QGroupBox(QString::fromUtf8("Fontes rápidas"));
